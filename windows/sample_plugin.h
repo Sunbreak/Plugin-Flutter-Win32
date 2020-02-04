@@ -28,9 +28,9 @@
 extern "C" {
 #endif
 
-// *** Replace SAMPLE with your plugin's name here.
-FLUTTER_PLUGIN_EXPORT void SamplePluginRegisterWithRegistrar(
-    FlutterDesktopPluginRegistrarRef registrar);
+    // *** Replace SAMPLE with your plugin's name here.
+    FLUTTER_PLUGIN_EXPORT void SamplePluginRegisterWithRegistrar(
+        FlutterDesktopPluginRegistrarRef registrar);
 
 #if defined(__cplusplus)
 }  // extern "C"
