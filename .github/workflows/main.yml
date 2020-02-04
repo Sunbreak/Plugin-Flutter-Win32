@@ -7,6 +7,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v1
+      - uses: warrenbuckley/Setup-Nuget@v1
+      - run: |
+          cd example\windows
+          nuget restore & echo 0
+          cd ..\..
+        shell: cmd
       - uses: subosito/flutter-action@v1
         with:
           channel: 'dev'
