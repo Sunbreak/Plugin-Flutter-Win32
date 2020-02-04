@@ -15,6 +15,9 @@
 
 // This must be included before VersionHelpers.h.
 #include <windows.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Devices.Bluetooth.h>
+#include <winrt/Windows.Devices.Bluetooth.Advertisement.h>
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -22,6 +25,10 @@
 
 #include <map>
 #include <memory>
+#include <string>
+
+using namespace winrt;
+using namespace Windows::Devices::Bluetooth::Advertisement;
 
 namespace {
     // *** Rename this class to match the linux pluginClass in your pubspec.yaml.
@@ -39,6 +46,10 @@ namespace {
         void HandleMethodCall(
             const flutter::MethodCall<flutter::EncodableValue>& method_call,
             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+        BluetoothLEAdvertisementWatcher bluetoothLEWatcher{ nullptr };
+        event_token bluetoothLEWatcherReceivedToken;
+        void BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
     };
 
     // static
@@ -65,6 +76,7 @@ namespace {
 
     SamplePlugin::~SamplePlugin() {}
 
+
     void SamplePlugin::HandleMethodCall(
         const flutter::MethodCall<flutter::EncodableValue>& method_call,
         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
@@ -73,11 +85,20 @@ namespace {
         if (methodName == "startScan")
         {
             OutputDebugString(L"HandleMethodCall startScan\n");
+            bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
+            bluetoothLEWatcherReceivedToken = bluetoothLEWatcher.Received({ this, &SamplePlugin::BluetoothLEWatcher_Received });
+            bluetoothLEWatcher.Start();
             result->Success(nullptr);
         }
         else if (methodName == "stopScan")
         {
             OutputDebugString(L"HandleMethodCall stopScan\n");
+            if (bluetoothLEWatcher)
+            {
+                bluetoothLEWatcher.Stop();
+                bluetoothLEWatcher.Received(bluetoothLEWatcherReceivedToken);
+            }
+            bluetoothLEWatcher = nullptr;
             result->Success(nullptr);
         }
         else
@@ -85,7 +106,11 @@ namespace {
             result->NotImplemented();
         }
     }
-
+    
+    void SamplePlugin::BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
+    {
+        OutputDebugString((L"Received " + std::to_wstring(args.BluetoothAddress()) + L"\n").c_str());
+    }
 }  // namespace
 
 void SamplePluginRegisterWithRegistrar(
