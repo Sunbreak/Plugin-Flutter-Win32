@@ -16,17 +16,14 @@
 // This must be included before VersionHelpers.h.
 #include <windows.h>
 
-#include <VersionHelpers.h>
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
 #include <map>
 #include <memory>
-#include <sstream>
 
 namespace {
-
     // *** Rename this class to match the linux pluginClass in your pubspec.yaml.
     class SamplePlugin : public flutter::Plugin
     {
@@ -72,31 +69,16 @@ namespace {
         const flutter::MethodCall<flutter::EncodableValue>& method_call,
         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
     {
-        // *** Replace the "getPlatformVersion" check with your plugin's method names.
-        // See:
-        // https://github.com/flutter/engine/tree/master/shell/platform/common/cpp/client_wrapper/include/flutter
-        // and
-        // https://github.com/flutter/engine/tree/master/shell/platform/windows/client_wrapper/include/flutter
-        // for the relevant Flutter APIs.
-        if (method_call.method_name().compare("getPlatformVersion") == 0)
+        auto methodName = method_call.method_name();
+        if (methodName == "startScan")
         {
-            std::ostringstream version_stream;
-            version_stream << "Windows ";
-            // The result returned here will depend on the app manifest of the runner.
-            if (IsWindows10OrGreater())
-            {
-                version_stream << "10+";
-            }
-            else if (IsWindows8OrGreater())
-            {
-                version_stream << "8";
-            }
-            else if (IsWindows7OrGreater())
-            {
-                version_stream << "7";
-            }
-            flutter::EncodableValue response(version_stream.str());
-            result->Success(&response);
+            OutputDebugString(L"HandleMethodCall startScan\n");
+            result->Success(nullptr);
+        }
+        else if (methodName == "stopScan")
+        {
+            OutputDebugString(L"HandleMethodCall stopScan\n");
+            result->Success(nullptr);
         }
         else
         {
