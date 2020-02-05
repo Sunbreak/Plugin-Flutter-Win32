@@ -18,7 +18,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 
 import 'package:sample/sample.dart';
-import 'package:sample/models.dart';
+
+import 'NotepadDetailPage.dart';
 
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
@@ -52,7 +53,7 @@ class _MobileHomePageState extends State<_MobileHomePage> {
   @override
   void initState() {
     super.initState();
-    _subscription = sample.scanResultStream.listen((result) {
+    _subscription = notepadConnector.scanResultStream.listen((result) {
       if (!_scanResults.any((r) => r.deviceId == result.deviceId)) {
         setState(() => _scanResults.add(result));
       }
@@ -89,13 +90,13 @@ class _MobileHomePageState extends State<_MobileHomePage> {
         RaisedButton(
           child: Text('startScan'),
           onPressed: () {
-            sample.startScan();
+            notepadConnector.startScan();
           },
         ),
         RaisedButton(
           child: Text('stopScan'),
           onPressed: () {
-            sample.stopScan();
+            notepadConnector.stopScan();
           },
         ),
       ],
@@ -111,6 +112,11 @@ class _MobileHomePageState extends State<_MobileHomePage> {
             ListTile(
               title: Text('${_scanResults[index].name}(${_scanResults[index].rssi})'),
               subtitle: Text(_scanResults[index].deviceId),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (context) => NotepadDetailPage(_scanResults[index]),
+                ));
+              },
             ),
         separatorBuilder: (context, index) => Divider(),
         itemCount: _scanResults.length,
