@@ -15,17 +15,35 @@
 
 // This must be included before VersionHelpers.h.
 #include <windows.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.Devices.Bluetooth.h>
+#include <winrt/Windows.Devices.Bluetooth.Advertisement.h>
+#include <winrt/Windows.Storage.Streams.h>
 
-#include <VersionHelpers.h>
 #include <flutter/method_channel.h>
+#include <flutter/basic_message_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
+#include <flutter/standard_message_codec.h>
 
 #include <map>
 #include <memory>
-#include <sstream>
+#include <string>
+
+using namespace winrt;
+using namespace Windows::Foundation::Collections;
+using namespace Windows::Devices::Bluetooth::Advertisement;
+using namespace Windows::Storage::Streams;
 
 namespace {
+    using flutter::EncodableMap;
+    using flutter::EncodableValue;
+
+    union uint16_t_union {
+        uint16_t uint16;
+        byte bytes[sizeof(uint16_t)];
+    };
 
     // *** Rename this class to match the linux pluginClass in your pubspec.yaml.
     class SamplePlugin : public flutter::Plugin
@@ -40,8 +58,14 @@ namespace {
     private:
         // Called when a method is called on this plugin's channel from Dart.
         void HandleMethodCall(
-            const flutter::MethodCall<flutter::EncodableValue>& method_call,
-            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+            const flutter::MethodCall<EncodableValue>& method_call,
+            std::unique_ptr<flutter::MethodResult<EncodableValue>> result);
+
+        BluetoothLEAdvertisementWatcher bluetoothLEWatcher{ nullptr };
+        event_token bluetoothLEWatcherReceivedToken;
+        void BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
+
+        std::unique_ptr<flutter::BasicMessageChannel<EncodableValue>> scanResultMessage;
     };
 
     // static
@@ -50,7 +74,7 @@ namespace {
     {
         // *** Replace "sample_plugin" with your plugin's channel name in this call.
         auto channel =
-            std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+            std::make_unique<flutter::MethodChannel<EncodableValue>>(
                 registrar->messenger(), "sample_plugin",
                 &flutter::StandardMethodCodec::GetInstance());
 
@@ -61,6 +85,11 @@ namespace {
             plugin_pointer->HandleMethodCall(call, std::move(result));
         });
 
+        plugin->scanResultMessage = std::make_unique<flutter::BasicMessageChannel<EncodableValue>>(
+            registrar->messenger(),
+            "sample_plugin/message.scanResult",
+            &flutter::StandardMessageCodec::GetInstance());
+
         registrar->AddPlugin(std::move(plugin));
     }
 
@@ -68,35 +97,30 @@ namespace {
 
     SamplePlugin::~SamplePlugin() {}
 
+
     void SamplePlugin::HandleMethodCall(
-        const flutter::MethodCall<flutter::EncodableValue>& method_call,
-        std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
+        const flutter::MethodCall<EncodableValue>& method_call,
+        std::unique_ptr<flutter::MethodResult<EncodableValue>> result)
     {
-        // *** Replace the "getPlatformVersion" check with your plugin's method names.
-        // See:
-        // https://github.com/flutter/engine/tree/master/shell/platform/common/cpp/client_wrapper/include/flutter
-        // and
-        // https://github.com/flutter/engine/tree/master/shell/platform/windows/client_wrapper/include/flutter
-        // for the relevant Flutter APIs.
-        if (method_call.method_name().compare("getPlatformVersion") == 0)
+        auto methodName = method_call.method_name();
+        if (methodName == "startScan")
         {
-            std::ostringstream version_stream;
-            version_stream << "Windows ";
-            // The result returned here will depend on the app manifest of the runner.
-            if (IsWindows10OrGreater())
+            OutputDebugString(L"HandleMethodCall startScan\n");
+            bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
+            bluetoothLEWatcherReceivedToken = bluetoothLEWatcher.Received({ this, &SamplePlugin::BluetoothLEWatcher_Received });
+            bluetoothLEWatcher.Start();
+            result->Success(nullptr);
+        }
+        else if (methodName == "stopScan")
+        {
+            OutputDebugString(L"HandleMethodCall stopScan\n");
+            if (bluetoothLEWatcher)
             {
-                version_stream << "10+";
+                bluetoothLEWatcher.Stop();
+                bluetoothLEWatcher.Received(bluetoothLEWatcherReceivedToken);
             }
-            else if (IsWindows8OrGreater())
-            {
-                version_stream << "8";
-            }
-            else if (IsWindows7OrGreater())
-            {
-                version_stream << "7";
-            }
-            flutter::EncodableValue response(version_stream.str());
-            result->Success(&response);
+            bluetoothLEWatcher = nullptr;
+            result->Success(nullptr);
         }
         else
         {
@@ -104,6 +128,34 @@ namespace {
         }
     }
 
+    std::vector<uint8_t> parseManufacturerData(BluetoothLEAdvertisement advertisement)
+    {
+        if (advertisement.ManufacturerData().Size() == 0)
+            return std::vector<uint8_t>();
+
+        auto manufacturerData = advertisement.ManufacturerData().GetAt(0);
+        // FIXME Compat with REG_DWORD_BIG_ENDIAN
+        uint8_t* prefix = uint16_t_union{ manufacturerData.CompanyId() }.bytes;
+        auto result = std::vector<uint8_t>{ prefix, prefix + sizeof(uint16_t_union) };
+
+        auto reader = DataReader::FromBuffer(manufacturerData.Data());
+        auto data = std::vector<uint8_t>(reader.UnconsumedBufferLength());
+        reader.ReadBytes(data);
+        result.insert(result.end(), data.begin(), data.end());
+        return result;
+    }
+
+    void SamplePlugin::BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
+    {
+        OutputDebugString((L"Received " + to_hstring(args.BluetoothAddress()) + L"\n").c_str());
+        auto manufacturerData = parseManufacturerData(args.Advertisement());
+        scanResultMessage->Send(EncodableValue(EncodableMap{
+            {EncodableValue("name"), EncodableValue(to_string(args.Advertisement().LocalName()))},
+            {EncodableValue("deviceId"), EncodableValue(std::to_string(args.BluetoothAddress()))},
+            {EncodableValue("manufacturerData"), EncodableValue(manufacturerData)},
+            {EncodableValue("rssi"), EncodableValue(args.RawSignalStrengthInDBm())},
+        }));
+    }
 }  // namespace
 
 void SamplePluginRegisterWithRegistrar(

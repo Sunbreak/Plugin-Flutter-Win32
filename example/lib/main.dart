@@ -11,65 +11,109 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import 'dart:async';
 
 import 'package:flutter/foundation.dart'
     show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'package:sample/sample.dart';
+import 'package:sample/models.dart';
 
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
-  runApp(new MyApp());
+  runApp(new MobileApp());
 }
 
-class MyApp extends StatefulWidget {
+class MobileApp extends StatelessWidget {
   @override
-  _MyAppState createState() => _MyAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: _MobileHomePage(),
+    );
+  }
 }
 
-class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
+class _MobileHomePage extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => _MobileHomePageState();
+}
+
+final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+_toast(String msg) => _scaffoldKey.currentState
+  .showSnackBar(SnackBar(content: Text(msg), duration: Duration(seconds: 2)));
+
+class _MobileHomePageState extends State<_MobileHomePage> {
+  StreamSubscription<NotepadScanResult> _subscription;
 
   @override
   void initState() {
     super.initState();
-    initPlatformState();
-  }
-
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
-    String platformVersion;
-    // Platform messages may fail, so we use a try/catch PlatformException.
-    try {
-      platformVersion = await Sample.platformVersion;
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
-    }
-
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, we want to discard the reply rather than calling
-    // setState to update our non-existent appearance.
-    if (!mounted) return;
-
-    setState(() {
-      _platformVersion = platformVersion;
+    _subscription = sample.scanResultStream.listen((result) {
+      if (!_scanResults.any((r) => r.deviceId == result.deviceId)) {
+        setState(() => _scanResults.add(result));
+      }
     });
   }
 
   @override
+  void dispose() {
+    super.dispose();
+    _subscription?.cancel();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text('Plugin example app'),
+      ),
+      body: Column(
+        children: <Widget>[
+          _buildButtons(),
+          Divider(color: Colors.blue,),
+          _buildListView(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: <Widget>[
+        RaisedButton(
+          child: Text('startScan'),
+          onPressed: () {
+            sample.startScan();
+          },
         ),
-        body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+        RaisedButton(
+          child: Text('stopScan'),
+          onPressed: () {
+            sample.stopScan();
+          },
         ),
+      ],
+    );
+  }
+
+  var _scanResults = List<NotepadScanResult>();
+
+  Widget _buildListView() {
+    return Expanded(
+      child: ListView.separated(
+        itemBuilder: (context, index) =>
+            ListTile(
+              title: Text('${_scanResults[index].name}(${_scanResults[index].rssi})'),
+              subtitle: Text(_scanResults[index].deviceId),
+            ),
+        separatorBuilder: (context, index) => Divider(),
+        itemCount: _scanResults.length,
       ),
     );
   }
