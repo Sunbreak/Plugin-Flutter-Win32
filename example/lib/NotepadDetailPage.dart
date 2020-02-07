@@ -1,10 +1,20 @@
+import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:sample/sample.dart';
 
+import 'PaintArea.dart';
+import 'stylus_paint/stylus_paint.dart';
+
 class NotepadDetailPage extends StatefulWidget {
   final scanResult;
+
+  // FIXME close
+  final notePenPointerController = StreamController<NotePenPointer>.broadcast();
+
+  final stylusPaintController = StylusPainterController();
 
   NotepadDetailPage(this.scanResult);
 
@@ -46,6 +56,7 @@ class _NotepadDetailPageState extends State<NotepadDetailPage> implements Notepa
   @override
   void handlePointer(List<NotePenPointer> list) {
     print('handlePointer ${list.length}');
+    widget.notePenPointerController.addStream(Stream.fromIterable(list));
   }
 
   @override
@@ -54,38 +65,35 @@ class _NotepadDetailPageState extends State<NotepadDetailPage> implements Notepa
       key: _scaffoldKey,
       appBar: AppBar(
         title: Text('NotepadDetailPage'),
-      ),
-      body: Column(
-        children: <Widget>[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: <Widget>[
-              RaisedButton(
-                child: Text('connect'),
-                onPressed: () {
-                  notepadConnector.connect(widget.scanResult, Uint8List.fromList([0x00, 0x00, 0x00, 0x02]));
-                },
-              ),
-              RaisedButton(
-                child: Text('disconnect'),
-                onPressed: () {
-                  notepadConnector.disconnect();
-                },
-              ),
-            ],
+        actions: <Widget>[
+          FlatButton(
+            child: Text('connect'),
+            onPressed: () {
+              notepadConnector.connect(widget.scanResult, Uint8List.fromList([0x00, 0x00, 0x00, 0x02]));
+            },
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: <Widget>[
-              RaisedButton(
-                child: Text('setMode'),
-                onPressed: () async {
-                  await _notepadClient.setMode(NotepadMode.Sync);
-                },
-              ),
-            ],
+          FlatButton(
+            child: Text('setMode'),
+            onPressed: () async {
+              await _notepadClient.setMode(NotepadMode.Sync);
+            },
+          ),
+          FlatButton(
+            child: Text('disconnect'),
+            onPressed: () {
+              notepadConnector.disconnect();
+            },
           ),
         ],
+      ),
+      body: Center(
+        child: PaintArea.of(
+          stream: widget.notePenPointerController.stream.map((p) => StylusPointer.fromMap(p.toMap())),
+          controller: widget.stylusPaintController,
+          srcSize: Size(14800, 21000),
+          dstSize: ui.window.physicalSize,
+          backgroundColor: Color(0xFFFEFEFE),
+        ),
       ),
     );
   }
