@@ -8,12 +8,6 @@ homepage:
 flutter:
   plugin:
     platforms:
-      # *** Remove any platforms you don't intend to support from this list,
-      # and update the pluginClass for those that remain.
-      linux:
-        pluginClass: SamplePlugin
-      macos:
-        pluginClass: SamplePlugin
       windows:
         pluginClass: SamplePlugin
 
@@ -23,3 +17,4 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  convert: ^2.1.1
