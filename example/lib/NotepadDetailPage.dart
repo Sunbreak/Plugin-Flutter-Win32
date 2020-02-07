@@ -74,6 +74,17 @@ class _NotepadDetailPageState extends State<NotepadDetailPage> implements Notepa
               ),
             ],
           ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: <Widget>[
+              RaisedButton(
+                child: Text('setMode'),
+                onPressed: () async {
+                  await _notepadClient.setMode(NotepadMode.Sync);
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
